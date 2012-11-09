@@ -30,6 +30,11 @@
 #include "config.h"
 #endif
 
+#if (_MSC_VER >= 1500 && _MSC_VER < 1600)  // VC9/Visual Studio 2008 specific 
+#include <stdint.h>
+#include <stdio.h>
+#endif
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

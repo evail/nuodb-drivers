@@ -32,6 +32,12 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#if (_MSC_VER >= 1500 && _MSC_VER < 1600)  // VC9/Visual Studio 2008 specific 
+#include <stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/utime.h>
+#endif
 
 #include "php.h"
 #ifdef ZEND_ENGINE_2
@@ -96,8 +102,8 @@ static int nuodb_alloc_prepare_stmt(pdo_dbh_t *, const char *, long, PdoNuoDbSta
 
 
 void nuodb_throw_zend_exception(const char *sql_state, int code, const char *msg) {
-  PDO_DBG_ENTER("nuodb_throw_zend_exception");
   TSRMLS_FETCH();
+  PDO_DBG_ENTER("nuodb_throw_zend_exception");
   PDO_DBG_INF_FMT("Throwing exception: SQLSTATE[%s] [%d] %s", sql_state, code, msg);
   zend_throw_exception_ex(php_pdo_get_exception(), code TSRMLS_CC, "SQLSTATE[%s] [%d] %s",
 			  sql_state, code, msg);
@@ -255,7 +261,7 @@ static int nuodb_handle_preparer(pdo_dbh_t * dbh, const char * sql, long sql_len
     RECORD_ERROR(dbh);
     zend_hash_destroy(np);
     FREE_HASHTABLE(np);
-    nuodb_stmt_dtor(S TSRMLS_CC);
+    nuodb_stmt_dtor(stmt TSRMLS_CC);
     PDO_DBG_RETURN(0);
 
 }
@@ -272,10 +278,13 @@ static void pdo_dbh_t_set_in_txn(void *dbh_opaque, unsigned in_txn) /* {{{ */
 /* called by PDO to execute a statement that doesn't produce a result set */
 static long nuodb_handle_doer(pdo_dbh_t * dbh, const char * sql, long sql_len TSRMLS_DC) /* {{{ */
 {
-    PDO_DBG_ENTER("nuodb_handle_doer");
+    pdo_nuodb_db_handle * H = NULL;
+
+	PDO_DBG_ENTER("nuodb_handle_doer");
     PDO_DBG_INF_FMT("dbh=%p", dbh);
     PDO_DBG_INF_FMT("sql=%.*s", sql_len, sql);
-    pdo_nuodb_db_handle * H = (pdo_nuodb_db_handle *)dbh->driver_data;
+
+	H = (pdo_nuodb_db_handle *)dbh->driver_data;
 	if (pdo_nuodb_db_handle_doer(H, dbh, sql, (unsigned)dbh->in_txn, (unsigned)dbh->auto_commit, &pdo_dbh_t_set_in_txn) == -1) {
         RECORD_ERROR(dbh);
 		PDO_DBG_RETURN(-1);
@@ -333,7 +342,6 @@ static int nuodb_handle_begin(pdo_dbh_t * dbh TSRMLS_DC) /* {{{ */
 {
     PDO_DBG_ENTER("nuodb_handle_begin");
     PDO_DBG_INF_FMT("dbh=%p", dbh);
-    pdo_nuodb_db_handle * H = (pdo_nuodb_db_handle *)dbh->driver_data;
     PDO_DBG_RETURN(1);
 }
 /* }}} */
@@ -341,9 +349,11 @@ static int nuodb_handle_begin(pdo_dbh_t * dbh TSRMLS_DC) /* {{{ */
 /* called by PDO to commit a transaction */
 static int nuodb_handle_commit(pdo_dbh_t * dbh TSRMLS_DC) /* {{{ */
 {
-    PDO_DBG_ENTER("nuodb_handle_commit");
+    pdo_nuodb_db_handle * H = NULL;
+
+	PDO_DBG_ENTER("nuodb_handle_commit");
     PDO_DBG_INF_FMT("dbh=%p", dbh);
-    pdo_nuodb_db_handle * H = (pdo_nuodb_db_handle *)dbh->driver_data;
+    H = (pdo_nuodb_db_handle *)dbh->driver_data;
     if (pdo_nuodb_db_handle_commit(H) == 0)
     {
         RECORD_ERROR(dbh);
@@ -356,9 +366,12 @@ static int nuodb_handle_commit(pdo_dbh_t * dbh TSRMLS_DC) /* {{{ */
 /* called by PDO to rollback a transaction */
 static int nuodb_handle_rollback(pdo_dbh_t * dbh TSRMLS_DC) /* {{{ */
 {
+    pdo_nuodb_db_handle * H = NULL;
+
     PDO_DBG_ENTER("nuodb_handle_rollback");
     PDO_DBG_INF_FMT("dbh=%p", dbh);
-    pdo_nuodb_db_handle * H = (pdo_nuodb_db_handle *)dbh->driver_data;
+    
+	H = (pdo_nuodb_db_handle *)dbh->driver_data;
     if (pdo_nuodb_db_handle_rollback(H) == 0)
     {
         RECORD_ERROR(dbh);
@@ -372,14 +385,15 @@ static int nuodb_handle_rollback(pdo_dbh_t * dbh TSRMLS_DC) /* {{{ */
 static int nuodb_alloc_prepare_stmt(pdo_dbh_t * dbh, const char * sql, long sql_len, /* {{{ */
                                     PdoNuoDbStatement ** s, HashTable * named_params TSRMLS_DC)
 {
-    pdo_nuodb_db_handle * H = (pdo_nuodb_db_handle *)dbh->driver_data;
+	pdo_nuodb_db_handle * H = NULL;
     char * c, *new_sql, in_quote, in_param, pname[64], *ppname;
     long l, pindex = -1;
 
-    PDO_DBG_ENTER("nuodb_alloc_prepare_stmt");
+	PDO_DBG_ENTER("nuodb_alloc_prepare_stmt");
     PDO_DBG_INF_FMT("dbh=%p", dbh);
     PDO_DBG_INF_FMT("sql=%.*s", sql_len, sql);
 
+	H = (pdo_nuodb_db_handle *)dbh->driver_data;
 
     *s = NULL;
 
@@ -468,13 +482,14 @@ static int nuodb_alloc_prepare_stmt(pdo_dbh_t * dbh, const char * sql, long sql_
 /* called by PDO to get the last insert id */
 static char *nuodb_handle_last_id(pdo_dbh_t *dbh, const char *name, unsigned int *len TSRMLS_DC)
 {
-    pdo_nuodb_db_handle * H = (pdo_nuodb_db_handle *)dbh->driver_data;
+	int c = 0;
+	pdo_nuodb_db_handle * H = (pdo_nuodb_db_handle *)dbh->driver_data;
     char *id_str = NULL;
     int id = pdo_nuodb_db_handle_last_id(H, name);
     if (id == 0) return NULL;
     *len = snprintf(NULL, 0, "%lu", id);
     id_str = (char *) emalloc((*len)+1);
-    int c = snprintf(id_str, (*len)+1, "%lu", id);
+    c = snprintf(id_str, (*len)+1, "%lu", id);
     return id_str;
 }
 
@@ -482,8 +497,9 @@ static char *nuodb_handle_last_id(pdo_dbh_t *dbh, const char *name, unsigned int
 /* called by PDO to set a driver-specific dbh attribute */
 static int nuodb_handle_set_attribute(pdo_dbh_t * dbh, long attr, zval * val TSRMLS_DC) /* {{{ */
 {
+    pdo_nuodb_db_handle * H = NULL;
     PDO_DBG_ENTER("nuodb_handle_set_attribute");
-    pdo_nuodb_db_handle * H = (pdo_nuodb_db_handle *)dbh->driver_data;
+    H = (pdo_nuodb_db_handle *)dbh->driver_data;
 
     switch (attr)
     {
@@ -599,6 +615,7 @@ static int pdo_nuodb_handle_factory(pdo_dbh_t * dbh, zval * driver_options TSRML
         { NUODB_OPT_SCHEMA,  NULL,	0 }  /* "schema" */
     };
 
+    pdo_nuodb_db_handle * H = NULL;
     int i;
     int	ret = 0;
     int status;
@@ -612,7 +629,6 @@ static int pdo_nuodb_handle_factory(pdo_dbh_t * dbh, zval * driver_options TSRML
     }
 
     PDO_DBG_ENTER("pdo_nuodb_handle_factory");
-    pdo_nuodb_db_handle * H = NULL;
     dbh->driver_data = pecalloc(1, sizeof(*H), dbh->is_persistent);
     H = (pdo_nuodb_db_handle *) dbh->driver_data;
     php_pdo_parse_data_source(dbh->data_source, dbh->data_source_len, vars, 2);

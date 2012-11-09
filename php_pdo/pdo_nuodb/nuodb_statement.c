@@ -30,6 +30,13 @@
 #include "config.h"
 #endif
 
+#if (_MSC_VER >= 1500 && _MSC_VER < 1600)  // VC9/Visual Studio 2008 specific 
+#include <stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/utime.h>
+#endif
+
 #include "php.h"
 #ifdef ZEND_ENGINE_2
 # include "zend_exceptions.h"
@@ -54,12 +61,12 @@ static void _release_PdoNuoDbStatement(pdo_nuodb_stmt * S)
 }
 
 /* called by PDO to clean up a statement handle */
-static int nuodb_stmt_dtor(pdo_stmt_t * stmt TSRMLS_DC) /* {{{ */
+/* static */ int nuodb_stmt_dtor(pdo_stmt_t * stmt TSRMLS_DC) /* {{{ */
 {
-    PDO_DBG_ENTER("nuodb_stmt_dtor");
     int result = 1;
     int i;
     pdo_nuodb_stmt * S = (pdo_nuodb_stmt *)stmt->driver_data;
+    PDO_DBG_ENTER("nuodb_stmt_dtor");
     PDO_DBG_INF_FMT("S=%ld", S);
     _release_PdoNuoDbStatement(S); /* release the statement */
 
@@ -104,10 +111,10 @@ static int nuodb_stmt_dtor(pdo_stmt_t * stmt TSRMLS_DC) /* {{{ */
 /* called by PDO to execute a prepared query */
 static int nuodb_stmt_execute(pdo_stmt_t * stmt TSRMLS_DC) /* {{{ */
 {
-    PDO_DBG_ENTER("nuodb_stmt_execute");
 	int status;
-
     pdo_nuodb_stmt * S = (pdo_nuodb_stmt *)stmt->driver_data;
+
+	PDO_DBG_ENTER("nuodb_stmt_execute");
     PDO_DBG_INF_FMT("S=%ld", S);
     if (!S) {
         PDO_DBG_RETURN(0);
@@ -126,8 +133,8 @@ static int nuodb_stmt_execute(pdo_stmt_t * stmt TSRMLS_DC) /* {{{ */
 static int nuodb_stmt_fetch(pdo_stmt_t * stmt, /* {{{ */
                             enum pdo_fetch_orientation ori, long offset TSRMLS_DC)
 {
-    PDO_DBG_ENTER("nuodb_stmt_fetch");
     pdo_nuodb_stmt * S = (pdo_nuodb_stmt *)stmt->driver_data;
+    PDO_DBG_ENTER("nuodb_stmt_fetch");
     PDO_DBG_INF_FMT("S=%ld", S);
     if (!stmt->executed)
     {
@@ -142,14 +149,15 @@ static int nuodb_stmt_fetch(pdo_stmt_t * stmt, /* {{{ */
 /* called by PDO to retrieve information about the fields being returned */
 static int nuodb_stmt_describe(pdo_stmt_t * stmt, int colno TSRMLS_DC) /* {{{ */
 {
-    PDO_DBG_ENTER("nuodb_stmt_describe");
     pdo_nuodb_stmt *S = (pdo_nuodb_stmt *)stmt->driver_data;
-    PDO_DBG_INF_FMT("S=%ld", S);
     struct pdo_column_data *col = &stmt->columns[colno];
     char *cp;
 	char const *column_name;
 	int colname_len;
 	int sqlTypeNumber;
+
+	PDO_DBG_ENTER("nuodb_stmt_describe");
+    PDO_DBG_INF_FMT("S=%ld", S);
 
     col->precision = 0;
     col->maxlen = 0;
@@ -235,10 +243,13 @@ static int nuodb_stmt_describe(pdo_stmt_t * stmt, int colno TSRMLS_DC) /* {{{ */
 static int nuodb_stmt_get_col(pdo_stmt_t * stmt, int colno, char ** ptr, /* {{{ */
                               unsigned long * len, int * caller_frees TSRMLS_DC)
 {
-    PDO_DBG_ENTER("nuodb_stmt_get_col");
     pdo_nuodb_stmt * S = (pdo_nuodb_stmt *)stmt->driver_data;
+    int sqlTypeNumber = 0;
+    
+	PDO_DBG_ENTER("nuodb_stmt_get_col");
     PDO_DBG_INF_FMT("S=%ld", S);
-    int sqlTypeNumber = pdo_nuodb_stmt_get_sql_type(S, colno);
+    
+	sqlTypeNumber = pdo_nuodb_stmt_get_sql_type(S, colno);
 
 	*len = 0;
     *ptr = NULL;
@@ -331,11 +342,14 @@ static int nuodb_stmt_get_col(pdo_stmt_t * stmt, int colno, char ** ptr, /* {{{ 
 static int nuodb_stmt_param_hook(pdo_stmt_t * stmt, struct pdo_bound_param_data * param, /* {{{ */
                                  enum pdo_param_event event_type TSRMLS_DC)
 {
-    PDO_DBG_ENTER("nuodb_stmt_param_hook");
     pdo_nuodb_stmt * S = (pdo_nuodb_stmt *)stmt->driver_data;
-    PDO_DBG_INF_FMT("S=%ld", S);
-    nuo_params * nuodb_params = param->is_param ? S->in_params : S->out_params;
+    nuo_params * nuodb_params = NULL;
     nuo_param * nuodb_param = NULL;
+
+	PDO_DBG_ENTER("nuodb_stmt_param_hook");
+    PDO_DBG_INF_FMT("S=%ld", S);
+
+	nuodb_params = param->is_param ? S->in_params : S->out_params;
 
     if (event_type == PDO_PARAM_EVT_FREE)   /* not used */
     {
@@ -577,8 +591,9 @@ static int nuodb_stmt_param_hook(pdo_stmt_t * stmt, struct pdo_bound_param_data 
 
 static int nuodb_stmt_set_attribute(pdo_stmt_t * stmt, long attr, zval * val TSRMLS_DC) /* {{{ */
 {
-    PDO_DBG_ENTER("nuodb_stmt_set_attribute");
     pdo_nuodb_stmt * S = (pdo_nuodb_stmt *)stmt->driver_data;
+
+	PDO_DBG_ENTER("nuodb_stmt_set_attribute");
     PDO_DBG_INF_FMT("S=%ld", S);
 
     switch (attr)

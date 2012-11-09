@@ -30,6 +30,12 @@
 #include "config.h"
 #endif
 
+#if (_MSC_VER >= 1500 && _MSC_VER < 1600)  // VC9/Visual Studio 2008 specific 
+#include <stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/utime.h>
+#endif
 #include "php.h"
 #include "php_ini.h"
 #include "ext/standard/info.h"

@@ -78,7 +78,7 @@ static inline void PDO_DBG_INF(char *msg) {}
 static inline void PDO_DBG_ERR(char *msg) {}
 static inline void PDO_DBG_INF_FMT(char *format, ...) {}
 static inline void PDO_DBG_ERR_FMT(char *format, ...) {}
-static inline void PDO_DBG_ENTER(char *func_name) {}
+static inline void PDO_DBG_ENTER(const char *func_name) {}
 #define PDO_DBG_RETURN(value)	return (value)
 #define PDO_DBG_VOID_RETURN		return;
 
