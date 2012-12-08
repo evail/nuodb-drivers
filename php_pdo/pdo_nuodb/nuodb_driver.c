@@ -640,7 +640,7 @@ static int pdo_nuodb_handle_factory(pdo_dbh_t * dbh, zval * driver_options TSRML
     options[2].option = "password";
     options[2].extra = (void *) dbh->password;
     options[3].option = "schema";
-    options[3].extra = (void *) vars[1].optval;
+    options[3].extra = (vars[1].optval == NULL) ? "USER" : vars[1].optval;
 
     optionsArray.count = 4;
     optionsArray.array = options;
