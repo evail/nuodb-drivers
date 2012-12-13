@@ -1,8 +1,0 @@
-*.bundle
-*.log
-*.o
-*.so
-ext/nuodb/Makefile
-pkg
-tmp
-.idea
